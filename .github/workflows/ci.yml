@@ -43,9 +43,11 @@ jobs:
         continue-on-error: true
 
       - name: Run Trivy Image Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.32.0
         with:
           image-ref: ledger-api:starter
           format: table
           exit-code: "0"
           ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
