@@ -41,3 +41,11 @@ jobs:
         with:
           config: p/security-audit
         continue-on-error: true
+
+      - name: Run Trivy Image Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ledger-api:starter
+          format: table
+          exit-code: 0
+          ignore-unfixed: true
