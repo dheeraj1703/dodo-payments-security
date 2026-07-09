@@ -4,173 +4,217 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
 
 
 permissions:
-  contents: write
+  contents: read
   packages: write
   security-events: write
   id-token: write
+  attestations: write
 
 
 env:
+
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/ledger-api
+
   IMAGE_TAG: ${{ github.sha }}
+
 
 
 jobs:
 
+
 ############################################################
-# BUILD + SECURITY SCAN
+# BUILD + SECURITY + SUPPLY CHAIN
 ############################################################
+
 
   security-ci:
 
+
     name: Build Scan and Security Gates
+
 
     runs-on: ubuntu-latest
 
 
+
     steps:
 
-    ########################################################
-    # Checkout
-    ########################################################
-
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-
-
-    ########################################################
-    # Docker Setup
-    ########################################################
-
-    - name: Docker Buildx Setup
-      uses: docker/setup-buildx-action@v3
-
-
-
-    ########################################################
-    # Build Image
-    ########################################################
-
-    - name: Build Docker Image
-      run: |
-
-        docker build \
-          -f ledger-api-assignment/app/Dockerfile \
-          -t ledger-api:test \
-          ledger-api-assignment/app
-
-
-
-    - name: Verify Image
-
-      run: |
-
-        docker images
-
 
 
 ############################################################
-# SAST
+# CHECKOUT
 ############################################################
 
 
-    - name: Run Semgrep SAST
+      - name: Checkout Repository
 
-      uses: semgrep/semgrep-action@v1
-
-      with:
-
-        config: p/security-audit
-
-      continue-on-error: true
+        uses: actions/checkout@v4
 
 
 
 
 
 ############################################################
-# TRIVY INSTALL
+# DOCKER BUILDX
 ############################################################
 
 
-    - name: Install Trivy
+      - name: Docker Buildx Setup
 
-      run: |
+        uses: docker/setup-buildx-action@v3
 
-        sudo apt-get update
-
-        sudo apt-get install -y curl
-
-        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-        | sudo sh -s -- -b /usr/local/bin
-
-        trivy --version
 
 
 
 
 ############################################################
-# IMAGE SCAN
+# BUILD LOCAL IMAGE FOR SCANNING
 ############################################################
 
 
-    - name: Trivy Image Scan
-
-      run: |
+      - name: Build Docker Image
 
 
-        trivy image \
-        --severity HIGH,CRITICAL \
-        --ignore-unfixed \
-        --exit-code 0 \
-        ledger-api:test
+        run: |
+
+
+          docker build \
+            -f ledger-api-assignment/app/Dockerfile \
+            -t ledger-api:test \
+            ledger-api-assignment/app
 
 
 
-
-############################################################
-# FILE SYSTEM SCAN
-############################################################
+      - name: Verify Docker Image
 
 
-    - name: Trivy Filesystem Scan
+        run: docker images
 
 
-      run: |
-
-
-        trivy fs \
-        --severity HIGH,CRITICAL \
-        --ignore-unfixed \
-        --exit-code 0 \
-        .
 
 
 
 
 ############################################################
-# SECRET SCAN
+# SEMGREP SAST
 ############################################################
 
 
-    - name: Gitleaks Scan
+      - name: Run Semgrep SAST
 
 
-      uses: gitleaks/gitleaks-action@v2
+        uses: semgrep/semgrep-action@v1
 
 
-      env:
+        with:
 
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          config: p/security-audit
 
 
-      continue-on-error: true
+        continue-on-error: true
+
+
+
+
+
+
+############################################################
+# INSTALL TRIVY
+############################################################
+
+
+      - name: Install Trivy
+
+
+        run: |
+
+
+          sudo apt-get update
+
+          sudo apt-get install -y curl
+
+
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+          | sudo sh -s -- -b /usr/local/bin
+
+
+          trivy --version
+
+
+
+
+
+
+############################################################
+# TRIVY IMAGE SCAN
+############################################################
+
+
+      - name: Trivy Image Scan
+
+
+        run: |
+
+
+          trivy image \
+          --severity HIGH,CRITICAL \
+          --ignore-unfixed \
+          --exit-code 0 \
+          ledger-api:test
+
+
+
+
+
+
+############################################################
+# TRIVY FILESYSTEM SCAN
+############################################################
+
+
+      - name: Trivy Filesystem Scan
+
+
+        run: |
+
+
+          trivy fs \
+          --severity HIGH,CRITICAL \
+          --ignore-unfixed \
+          --exit-code 0 \
+          .
+
+
+
+
+
+
+############################################################
+# GITLEAKS
+############################################################
+
+
+      - name: Gitleaks Secret Scan
+
+
+        uses: gitleaks/gitleaks-action@v2
+
+
+        env:
+
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+        continue-on-error: true
+
+
 
 
 
@@ -180,50 +224,59 @@ jobs:
 ############################################################
 
 
-
-    - name: Login to GHCR
-
-
-      uses: docker/login-action@v3
+      - name: Login to GHCR
 
 
-      with:
+        uses: docker/login-action@v3
 
-        registry: ghcr.io
 
-        username: ${{ github.actor }}
+        with:
 
-        password: ${{ secrets.GITHUB_TOKEN }}
+
+          registry: ghcr.io
+
+
+          username: ${{ github.actor }}
+
+
+          password: ${{ secrets.GITHUB_TOKEN }}
+
 
 
 
 
 
 ############################################################
-# PUSH IMAGE
+# BUILD AND PUSH IMAGE WITH DIGEST
 ############################################################
 
 
-    - name: Tag Image
+      - name: Build and Push Image
 
 
-      run: |
+        id: build
 
 
-        docker tag ledger-api:test \
-        $IMAGE_NAME:$IMAGE_TAG
+        uses: docker/build-push-action@v6
 
 
+        with:
 
 
-    - name: Push Image
+          context: ledger-api-assignment/app
 
 
-      run: |
+          file: ledger-api-assignment/app/Dockerfile
 
 
-        docker push \
-        $IMAGE_NAME:$IMAGE_TAG
+          push: true
+
+
+          tags: |
+
+
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
 
 
 
@@ -234,49 +287,56 @@ jobs:
 ############################################################
 
 
-    - name: Install Cosign
+      - name: Install Cosign
 
 
-      uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v3
 
 
-
-
-############################################################
-# COSIGN SIGN
-############################################################
-
-
-    - name: Sign Container Image
-
-
-      run: |
-
-
-        cosign sign \
-        --yes \
-        $IMAGE_NAME:$IMAGE_TAG
 
 
 
 
 ############################################################
-# VERIFY SIGNATURE
+# SIGN IMAGE
 ############################################################
 
 
-    - name: Verify Signature
+      - name: Sign Container Image
 
 
-      run: |
+        run: |
 
 
-        cosign verify \
-        $IMAGE_NAME:$IMAGE_TAG \
-        --certificate-identity-regexp \
-        "https://github.com/${{ github.repository }}/.*" \
-        --certificate-oidc-issuer \
-        "https://token.actions.githubusercontent.com"
+          cosign sign \
+          --yes \
+          $IMAGE_NAME@${{ steps.build.outputs.digest }}
+
+
+
+
+
+
+
+############################################################
+# VERIFY IMAGE SIGNATURE
+############################################################
+
+
+      - name: Verify Signature
+
+
+        run: |
+
+
+          cosign verify \
+          $IMAGE_NAME@${{ steps.build.outputs.digest }} \
+          --certificate-identity-regexp \
+          "https://github.com/${{ github.repository }}/.*" \
+          --certificate-oidc-issuer \
+          "https://token.actions.githubusercontent.com"
+
+
 
 
 
@@ -287,19 +347,23 @@ jobs:
 ############################################################
 
 
-    - name: Generate SLSA Provenance
+      - name: Generate SLSA Provenance
 
 
-      uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
 
 
-      with:
+        with:
 
-        subject-name: ${{ env.IMAGE_NAME }}
 
-        subject-digest: ${{ steps.build.outputs.digest }}
+          subject-name: ${{ env.IMAGE_NAME }}
 
-        push-to-registry: true
+
+          subject-digest: ${{ steps.build.outputs.digest }}
+
+
+          push-to-registry: true
+
 
 
 
@@ -310,32 +374,38 @@ jobs:
 ############################################################
 
 
-    - name: Create Reports
+      - name: Create Reports
 
 
-      run: |
+        if: always()
 
 
-        mkdir reports
-
-        docker images > reports/docker-images.txt
+        run: |
 
 
+          mkdir -p reports
 
 
-    - name: Upload Security Reports
+          docker images > reports/docker-images.txt
 
 
-      if: always()
 
 
-      uses: actions/upload-artifact@v4
 
 
-      with:
+      - name: Upload Security Reports
 
 
-        name: task2-security-reports
+        if: always()
 
 
-        path: reports/
+        uses: actions/upload-artifact@v4
+
+
+        with:
+
+
+          name: task2-security-reports
+
+
+          path: reports/
