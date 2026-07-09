@@ -34,5 +34,9 @@ jobs:
             ledger-api-assignment/app
 
       - name: Verify Docker Image
-        run: |
-          docker images
+        run: docker images
+
+      - name: Run Semgrep (SAST)
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: p/security-audit
