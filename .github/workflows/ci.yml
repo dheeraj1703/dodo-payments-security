@@ -5,6 +5,8 @@ on:
     branches:
       - main
   pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -14,6 +16,7 @@ permissions:
 
 jobs:
   build:
+    name: Build Ledger API
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +28,11 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t ledger-api:starter .
+          docker build \
+            -f ledger-api-assignment/app/Dockerfile \
+            -t ledger-api:starter \
+            ledger-api-assignment/app
 
-      - name: Verify Image
-        run: docker images
+      - name: Verify Docker Image
+        run: |
+          docker images
