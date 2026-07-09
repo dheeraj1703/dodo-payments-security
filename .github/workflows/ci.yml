@@ -1,3 +1,4 @@
+
 name: Task 2 - Secure CI Pipeline
 
 on:
@@ -14,9 +15,13 @@ permissions:
   security-events: write
   id-token: write
 
+env:
+  IMAGE_NAME: ledger-api
+  IMAGE_TAG: starter
+
 jobs:
-  build:
-    name: Build Ledger API
+  security-ci:
+    name: Build, Scan and Verify
     runs-on: ubuntu-latest
 
     steps:
@@ -30,24 +35,75 @@ jobs:
         run: |
           docker build \
             -f ledger-api-assignment/app/Dockerfile \
-            -t ledger-api:starter \
+            -t ${IMAGE_NAME}:${IMAGE_TAG} \
             ledger-api-assignment/app
 
       - name: Verify Docker Image
         run: docker images
 
-      - name: Run Semgrep (SAST)
+      #########################################################
+      # SAST
+      #########################################################
+
+      - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
         with:
           config: p/security-audit
         continue-on-error: true
 
-      - name: Run Trivy Image Scan
-        uses: aquasecurity/trivy-action@0.32.0
+      #########################################################
+      # Install Trivy
+      #########################################################
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.65.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.65.0_Linux-64bit.deb
+
+      #########################################################
+      # Scan Docker Image
+      #########################################################
+
+      - name: Trivy Image Scan
+        run: |
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            ${IMAGE_NAME}:${IMAGE_TAG}
+
+      #########################################################
+      # Scan Repository Filesystem
+      #########################################################
+
+      - name: Trivy Filesystem Scan
+        run: |
+          trivy fs \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            .
+
+      #########################################################
+      # Secret Scan
+      #########################################################
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      #########################################################
+      # Upload Reports
+      #########################################################
+
+      - name: Upload Scan Reports
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          image-ref: ledger-api:starter
-          format: table
-          exit-code: "0"
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          severity: "CRITICAL,HIGH"
+          name: security-reports
+          path: |
+            .
+
