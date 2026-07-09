@@ -43,9 +43,9 @@ jobs:
         continue-on-error: true
 
       - name: Run Trivy Image Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ledger-api:starter
           format: table
-          exit-code: 0
+          exit-code: "0"
           ignore-unfixed: true
